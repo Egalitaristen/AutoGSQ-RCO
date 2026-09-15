@@ -1,5 +1,7 @@
 # AutoGSQ-RCO
 
+> **⚠️ EARLY TESTING — NOT PRODUCTION READY.** This repo is active research code. Measured quality currently trails the official baseline (our probe PPL 42.67 vs official Q4_K_M 14.21), full-model results are still being built, APIs and file formats may change without notice, and generated checkpoints should be validated before any real use. See [Known limitations](#known-limitations-honest) for the honest state of play.
+
 An end-to-end pipeline combining Gumbel-Softmax Quantization (GSQ) and Riemannian Constrained Optimization (RCO) to produce exact-budget, mixed-precision GGUF checkpoints for llama.cpp, Ollama, and LM Studio deployment.
 
 ## Pipeline
