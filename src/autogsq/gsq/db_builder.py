@@ -248,60 +248,40 @@ def build_candidate_database(
         device=str(calib_dev),
     )
 
-    # Phase 1: Hessian capture for all layers up front. The whole model sits
-    # on calib_dev; hooks live on one layer at a time so peak memory is one
-    # layer's H matrices plus a single forward's activations.
+    # Streaming fused loop: capture layer i's Hessians, train layer i,
+    # free, next. Peak accelerator memory is one layer's H/Hinv plus the
+    # model — capturing all layers up front OOMs any <=16 GB card around
+    # layer 4-5 (Qwen3-4B down_proj H alone is 10240^2 fp32 ~= 419 MB).
     print(f"Capturing Hessians on {calib_dev}...")
     store.write_build_status(stage="generate-db", phase="calibration", num_layers=num_layers_to_process)
     model.to(calib_dev)
-    all_hessians: Dict[str, Dict[str, torch.Tensor]] = {}
     for layer_idx in range(num_layers_to_process):
         layer_name = f"{prefix}.{layer_idx}"
+        layer = layers[layer_idx]
         layer_tensors = [
             f"{layer_name}.{tname}.weight"
-            for tname, module in layers[layer_idx].named_modules()
+            for tname, module in layer.named_modules()
             if isinstance(module, nn.Linear) and should_quantize_tensor(tname + ".weight")
         ]
         if resume and store.is_layer_complete(layer_name, bitwidth_options, layer_tensors):
-            print(f"Hessians for {layer_name} already complete, skipping (resume=True).")
-            continue
-        store.write_build_status(stage="generate-db", phase="capture", layer_idx=layer_idx, layer_name=layer_name, num_layers=num_layers_to_process)
-        print(f"Capturing Hessians for {layer_name} ({len(calib_batches)} batches)...")
-        all_hessians.update(
-            collect_layer_hessians(
-                model, layers[layer_idx], layer_name, calib_batches, calib_dev,
-                damping=gptq_damping,
-            )
-        )
-    model.to("cpu")
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    del calib_batches
-
-    # Phase 2: per-tensor training with 1-layer accelerator streaming.
-    for layer_idx in range(num_layers_to_process):
-        layer_name = f"{prefix}.{layer_idx}"
-
-        if resume and store.is_layer_complete(
-            layer_name,
-            bitwidth_options,
-            [
-                f"{layer_name}.{tname}.weight"
-                for tname, module in layers[layer_idx].named_modules()
-                if isinstance(module, nn.Linear) and should_quantize_tensor(tname + ".weight")
-            ],
-        ):
             print(f"Layer {layer_name} already complete, skipping (resume=True).")
             continue
 
-        store.write_build_status(stage="generate-db", phase="train", layer_idx=layer_idx, layer_name=layer_name, num_layers=num_layers_to_process)
-        hessians = {
-            k: v for k, v in all_hessians.items()
-            if k.startswith(layer_name + ".")
-        }
+        store.write_build_status(stage="generate-db", phase="capture", layer_idx=layer_idx, layer_name=layer_name, num_layers=num_layers_to_process)
+        print(f"Capturing Hessians for {layer_name} ({len(calib_batches)} batches)...")
+        hessians = collect_layer_hessians(
+            model, layer, layer_name, calib_batches, calib_dev,
+            damping=gptq_damping,
+        )
 
-        layer = layers[layer_idx]
+        store.write_build_status(stage="generate-db", phase="train", layer_idx=layer_idx, layer_name=layer_name, num_layers=num_layers_to_process)
         layer.to(target_device)
+
+        # Bound so the post-layer cleanup below never hits unbound names
+        # on layers with no quantizable linears.
+        hess = H = Hinv = None
+        qparams = {}
+        dequant_w = None
 
         # Process each linear projection in the layer
         for tensor_name, module in layer.named_modules():
@@ -349,14 +329,20 @@ def build_candidate_database(
 
         store.mark_layer_complete(layer_name)
 
-        # Drop this layer's Hessians (all remaining H/Hinv freed as we go).
-        for k in [k for k in all_hessians if k.startswith(layer_name + ".")]:
-            del all_hessians[k]
+        # Drop this layer's Hessians (peak stays at one layer, by design).
+        # NB: loop locals (H/Hinv/hess/...) stay bound after the for loop
+        # and would pin the last tensor's Hessians into the next layer.
+        del hessians, hess, H, Hinv, qparams, dequant_w
 
         # Offload layer to CPU/meta to free accelerator VRAM
         layer.to("cpu")
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    model.to("cpu")
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    del calib_batches
 
     print(f"Candidate database generation complete at: {out_dir}")
     store.write_build_status(stage="generate-db", phase="done")
