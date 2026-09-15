@@ -80,6 +80,49 @@ def _effective_bpw(label: str) -> float:
     return float(label)
 
 
+@app.command("status")
+def status(
+    db_dir: Path = typer.Option(..., "--db-dir", "-d", help="Candidate database directory"),
+    log: Optional[Path] = typer.Option(None, "--log", help="Build log file to tail"),
+    log_lines: int = typer.Option(3, "--log-lines", help="Log tail lines to show"),
+) -> None:
+    """Show generate-db progress: heartbeat phase, layers, candidates, staleness."""
+    import time as _time
+
+    store = CandidateStore(db_dir)
+    st = store.read_build_status()
+    progress = store.load_progress()
+    layers = progress.get("completed_layers", [])
+    cands = progress.get("completed_candidates", [])
+    now = _time.time()
+
+    if not st:
+        console.print("[yellow]No build_status.json heartbeat — old code or no build yet.[/yellow]")
+    else:
+        upd = st.get("updated_at", 0)
+        age = now - upd if upd else float("inf")
+        stale = " [bold red]STALE[/bold red]" if age > 600 else ""
+        phase = st.get("phase", "?")
+        li = st.get("layer_idx")
+        nl = st.get("num_layers")
+        where = f" layer {li + 1}/{nl}" if isinstance(li, int) and nl else ""
+        console.print(
+            f"[cyan]{st.get('stage', '?')} / {phase}{where}[/cyan] "
+            f"(heartbeat {age:.0f}s ago){stale}"
+        )
+    console.print(
+        f"layers complete: [green]{len(layers)}[/green] | "
+        f"candidates: [green]{len(cands)}[/green]"
+    )
+    if log is not None and log.is_file():
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        console.print(f"[dim]--- {log} (last {log_lines}) ---[/dim]")
+        for line in lines[-log_lines:]:
+            console.print(f"[dim]{line[-220:]}[/dim]")
+    elif log is not None:
+        console.print(f"[yellow]Log file not found: {log}[/yellow]")
+
+
 @app.command("backfill-mse")
 def backfill_mse_cmd(
     db_dir: Path = typer.Option(..., "--db-dir", "-d", help="Candidate database directory"),

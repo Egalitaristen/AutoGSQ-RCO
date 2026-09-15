@@ -107,6 +107,37 @@ class CandidateStore:
         with open(self.progress_file, "w", encoding="utf-8") as f:
             json.dump(progress, f, indent=2)
 
+    def write_build_status(self, **fields: Any) -> Dict[str, Any]:
+        """Merge fields into build_status.json heartbeat (machine-readable progress).
+
+        Called by long stages (e.g. generate-db) at phase/layer boundaries;
+        ``autogsq status`` renders it. Always stamps ``updated_at``.
+        """
+        import time as _time
+
+        status: Dict[str, Any] = {}
+        try:
+            with open(self.db_dir / "build_status.json", "r", encoding="utf-8") as f:
+                status = json.load(f)
+        except Exception:
+            pass
+        status.update(fields)
+        status["updated_at"] = _time.time()
+        try:
+            with open(self.db_dir / "build_status.json", "w", encoding="utf-8") as f:
+                json.dump(status, f, indent=2)
+        except Exception:
+            pass
+        return status
+
+    def read_build_status(self) -> Dict[str, Any]:
+        """Read the build_status.json heartbeat ({} when absent)."""
+        try:
+            with open(self.db_dir / "build_status.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
     def is_layer_complete(
         self,
         layer_name: str,

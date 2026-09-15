@@ -252,6 +252,7 @@ def build_candidate_database(
     # on calib_dev; hooks live on one layer at a time so peak memory is one
     # layer's H matrices plus a single forward's activations.
     print(f"Capturing Hessians on {calib_dev}...")
+    store.write_build_status(stage="generate-db", phase="calibration", num_layers=num_layers_to_process)
     model.to(calib_dev)
     all_hessians: Dict[str, Dict[str, torch.Tensor]] = {}
     for layer_idx in range(num_layers_to_process):
@@ -264,6 +265,7 @@ def build_candidate_database(
         if resume and store.is_layer_complete(layer_name, bitwidth_options, layer_tensors):
             print(f"Hessians for {layer_name} already complete, skipping (resume=True).")
             continue
+        store.write_build_status(stage="generate-db", phase="capture", layer_idx=layer_idx, layer_name=layer_name, num_layers=num_layers_to_process)
         print(f"Capturing Hessians for {layer_name} ({len(calib_batches)} batches)...")
         all_hessians.update(
             collect_layer_hessians(
@@ -292,6 +294,7 @@ def build_candidate_database(
             print(f"Layer {layer_name} already complete, skipping (resume=True).")
             continue
 
+        store.write_build_status(stage="generate-db", phase="train", layer_idx=layer_idx, layer_name=layer_name, num_layers=num_layers_to_process)
         hessians = {
             k: v for k, v in all_hessians.items()
             if k.startswith(layer_name + ".")
@@ -356,4 +359,5 @@ def build_candidate_database(
             torch.cuda.empty_cache()
 
     print(f"Candidate database generation complete at: {out_dir}")
+    store.write_build_status(stage="generate-db", phase="done")
     return store
