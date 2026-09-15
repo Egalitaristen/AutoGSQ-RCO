@@ -66,6 +66,11 @@ def test_hessians_freed_per_layer(tmp_path, monkeypatch):
                 f"layer {i} Hessians still alive during {layer_name} "
                 "capture: streaming violated (OOM on <=16 GB cards)"
             )
+        # Every layer must sit on one device: capture forwards run through
+        # the whole model, so a layer parked elsewhere breaks the next
+        # capture with a cuda:0/cpu mismatch. (Vacuous on CPU; bites on CUDA.)
+        devices = {p.device for p in model.parameters()}
+        assert len(devices) == 1, f"model split across devices: {devices}"
         out = real_collect(model, layer, layer_name, batches, device, **kw)
         assert len(out) == 2  # q_proj + k_proj
         assert all(set(d) == {"H", "Hinv"} for d in out.values())

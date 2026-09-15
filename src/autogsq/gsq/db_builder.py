@@ -334,8 +334,10 @@ def build_candidate_database(
         # and would pin the last tensor's Hessians into the next layer.
         del hessians, hess, H, Hinv, qparams, dequant_w
 
-        # Offload layer to CPU/meta to free accelerator VRAM
-        layer.to("cpu")
+        # Park the finished layer back on calib_dev (NOT cpu): subsequent
+        # layers' capture forwards run through the whole model, so every
+        # layer must stay on one device until the loop ends.
+        layer.to(calib_dev)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
