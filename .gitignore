@@ -27,3 +27,7 @@ runtime/
 Thumbs.db
 .vscode/
 .idea/
+
+# ctags index
+tags
+TAGS
