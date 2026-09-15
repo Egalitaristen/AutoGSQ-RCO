@@ -1,0 +1,29 @@
+# Virtualenvs and install artifacts
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Run artifacts: model weights, candidate DBs, allocations, logs, outputs.
+# Configs under configs/ and tests/ fixtures stay tracked.
+runtime/
+*.gguf
+*.safetensors
+*.pth
+*.pt
+*.log
+
+# Tokenizer/model caches
+.cache/
+*.bin
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

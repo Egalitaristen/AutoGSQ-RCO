@@ -1,0 +1,35 @@
+model:
+  name: "meta-llama/Meta-Llama-3-8B"
+  device: "cuda"
+  dtype: "bfloat16"
+
+data:
+  dataset_name: "wikitext2"
+  num_samples: 2048
+  max_length: 2048
+
+gsq:
+  bitwidth_options: ["ternary", 2, 3]
+  init_method: "gptq"
+  group_size: 128
+  temperature: [2.0, 0.05]
+  logit_scale: [100.0, 500.0]
+  num_epochs: 8
+  optimizer: "lion"
+  learning_rate: 0.001
+
+rco:
+  target_bpw: 2.1
+  eval_dataset: "wikitext2"
+  num_steps: 1500
+  lr: 0.01
+  temperature: 1.0
+  temperature_min: 0.1
+
+gguf:
+  gguf_type_tolerance_bpw: 0.20
+  fallback_on_no_match: "round_down"
+
+output:
+  checkpoint_dir: "./runtime"
+  run_id: null

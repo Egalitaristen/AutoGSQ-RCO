@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autogsq"
+version = "0.1.0"
+description = "Mixed-precision quantization pipeline combining Gumbel-Softmax Quantization (GSQ) and Riemannian Constrained Optimization (RCO) with GGUF export."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1.0",
+    "gguf>=0.10.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65.0",
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+    "transformers>=4.36.0",
+    "safetensors>=0.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+autogsq = "autogsq.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
