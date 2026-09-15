@@ -256,7 +256,13 @@ def build_candidate_database(
     all_hessians: Dict[str, Dict[str, torch.Tensor]] = {}
     for layer_idx in range(num_layers_to_process):
         layer_name = f"{prefix}.{layer_idx}"
-        if resume and store.is_layer_complete(layer_name, bitwidth_options):
+        layer_tensors = [
+            f"{layer_name}.{tname}.weight"
+            for tname, module in layers[layer_idx].named_modules()
+            if isinstance(module, nn.Linear) and should_quantize_tensor(tname + ".weight")
+        ]
+        if resume and store.is_layer_complete(layer_name, bitwidth_options, layer_tensors):
+            print(f"Hessians for {layer_name} already complete, skipping (resume=True).")
             continue
         print(f"Capturing Hessians for {layer_name} ({len(calib_batches)} batches)...")
         all_hessians.update(
@@ -274,7 +280,15 @@ def build_candidate_database(
     for layer_idx in range(num_layers_to_process):
         layer_name = f"{prefix}.{layer_idx}"
 
-        if resume and store.is_layer_complete(layer_name, bitwidth_options):
+        if resume and store.is_layer_complete(
+            layer_name,
+            bitwidth_options,
+            [
+                f"{layer_name}.{tname}.weight"
+                for tname, module in layers[layer_idx].named_modules()
+                if isinstance(module, nn.Linear) and should_quantize_tensor(tname + ".weight")
+            ],
+        ):
             print(f"Layer {layer_name} already complete, skipping (resume=True).")
             continue
 

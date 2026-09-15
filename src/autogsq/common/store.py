@@ -107,6 +107,22 @@ class CandidateStore:
         with open(self.progress_file, "w", encoding="utf-8") as f:
             json.dump(progress, f, indent=2)
 
-    def is_layer_complete(self, layer_name: str, bitwidth_options: List[Union[int, str]]) -> bool:
-        """Check if all bit-width candidates for a layer are complete."""
-        return all(self.is_candidate_complete(layer_name, bits) for bits in bitwidth_options)
+    def is_layer_complete(
+        self,
+        layer_name: str,
+        bitwidth_options: List[Union[int, str]],
+        tensor_names: Optional[List[str]] = None,
+    ) -> bool:
+        """Check if all bit-width candidates for a layer are complete.
+
+        Candidates are keyed by full tensor name, so the layer's tensor
+        names must be supplied; without them completeness cannot be
+        determined (a layer-level key never matches) and False is returned.
+        """
+        if not tensor_names:
+            return False
+        return all(
+            self.is_candidate_complete(t, bits)
+            for t in tensor_names
+            for bits in bitwidth_options
+        )
